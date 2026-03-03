@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from pulsecheck_py.fastapi import make_health_router
-from pulsecheck_py.core import HealthRegistry
+from pulsecheck.fastapi import make_health_router
+from pulsecheck.core import HealthRegistry
 
 app = FastAPI()
 
