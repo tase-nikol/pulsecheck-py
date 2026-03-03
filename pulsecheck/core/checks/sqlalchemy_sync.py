@@ -1,0 +1,60 @@
+from __future__ import annotations
+import anyio
+
+import time
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
+
+from ..models import HealthCheckResult, HealthStatus
+from ..utils import now_ms
+from .base import CheckConfig, HealthCheck
+
+
+class SQLAlchemySyncCheck(HealthCheck):
+    def __init__(
+        self,
+        engine: Engine,
+        *,
+        name: str = "database",
+        timeout_s: float = 2.0,
+        degrade_threshold_ms: float = 500.0,
+    ) -> None:
+        super().__init__(
+            CheckConfig(
+                name=name,
+                readiness=True,
+                timeout_s=timeout_s,
+                degrade_threshold_ms=degrade_threshold_ms,
+            )
+        )
+        self._engine = engine
+
+    async def check(self) -> HealthCheckResult:
+        start = time.perf_counter()
+
+        def _run():
+            with self._engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+
+        try:
+            await anyio.to_thread.run_sync(_run)
+
+            elapsed = now_ms(start)
+
+            status = (
+                HealthStatus.DEGRADED
+                if self.config.degrade_threshold_ms
+                   and elapsed > self.config.degrade_threshold_ms
+                else HealthStatus.HEALTHY
+            )
+
+            return HealthCheckResult(
+                status=status,
+                response_time_ms=elapsed,
+            )
+
+        except Exception as e:
+            return HealthCheckResult(
+                status=HealthStatus.UNHEALTHY,
+                error=f"Database failed: {repr(e)}",
+            )

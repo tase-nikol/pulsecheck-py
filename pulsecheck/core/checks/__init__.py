@@ -3,6 +3,7 @@ from .base import HealthCheck, CheckConfig
 
 if TYPE_CHECKING:
     from .sqlalchemy_async import SQLAlchemyAsyncCheck
+    from .sqlalchemy_sync import SQLAlchemySyncCheck
     from .django_db import DjangoDBCheck
     from .redis_async import RedisAsyncCheck
     from .redis_sync import RedisSyncCheck
@@ -14,6 +15,7 @@ __all__ = [
     "HealthCheck",
     "CheckConfig",
     "SQLAlchemyAsyncCheck",
+    "SQLAlchemySyncCheck",
     "DjangoDBCheck",
     "RedisAsyncCheck",
     "RedisSyncCheck",
@@ -27,6 +29,10 @@ def __getattr__(name: str):
     if name == "SQLAlchemyAsyncCheck":
         from .sqlalchemy_async import SQLAlchemyAsyncCheck
         return SQLAlchemyAsyncCheck
+
+    if name == "SQLAlchemySyncCheck":
+        from .sqlalchemy_sync import SQLAlchemySyncCheck
+        return SQLAlchemySyncCheck
 
     if name == "DjangoDBCheck":
         from .django_db import DjangoDBCheck

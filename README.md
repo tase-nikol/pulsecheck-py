@@ -1,126 +1,183 @@
-# PulseCheck
+PulseCheck
+==========
 
 > Unified health, liveness, and readiness checks for Python microservices.
 
 PulseCheck is a framework-agnostic health check library designed for modern Python services.
 
-It provides a pluggable health engine with adapters for FastAPI and Django, built with Kubernetes readiness/liveness semantics in mind.
+It provides a pluggable health engine with adapters for FastAPI and Django, built around Kubernetes liveness and readiness semantics.
 
----
+* * * * *
 
-## Features
-- Framework-agnostic core
-- FastAPI adapter
-- Django adapter
-- Pluggable dependency checks:
-  - SQLAlchemy (async)
-  - Django ORM
-  - Redis (sync & async)
-  - RabbitMQ (Kombu)
-  - Celery worker inspection
-  - HTTP dependency checks
+Features
+----------
 
-- Configurable timeouts
+-   Framework-agnostic core
 
-- Degraded vs unhealthy states
+-   FastAPI adapter
 
-- Optional dependency extras
+-   Django adapter
 
-- Zero forced framework pollution
+-   Pluggable dependency checks:
 
-- Production-ready JSON schema
+    -   SQLAlchemy (async & sync)
 
-- Kubernetes-compatible
+    -   Django ORM
 
----
+    -   Redis (async & sync)
 
-## Installation
+    -   RabbitMQ (Kombu)
 
-Install core only:
+    -   Celery worker inspection
 
-```bash
+    -   HTTP dependency checks
+
+-   Configurable timeouts
+
+-   Degraded vs unhealthy states
+
+-   Optional dependency extras
+
+-   Zero forced framework pollution
+
+-   Production-ready JSON schema
+
+-   Kubernetes-compatible design
+
+* * * * *
+
+Installation
+------------
+
+### Core only
+```python
 pip install pulsecheck-py
 ```
-Install with FastAPI support:
-```bash 
+### With FastAPI support
+```python 
 pip install pulsecheck-py[fastapi]
 ```
-Install with Django support:
-
-```bash
+### With Django support
+```python
 pip install pulsecheck-py[django]
 ```
-Install with multiple dependency checks:
-
-```bash 
+### With selected dependency checks
+```python
 pip install pulsecheck-py[fastapi,redis_async,sqlalchemy_async,rabbitmq,celery]
 ```
-FastAPI Example
-------------------
+Only install what you use.\
+PulseCheck does **not** force optional frameworks or libraries.
 
-``` python
-from fastapi import FastAPI 
-from pulsecheck.core import HealthRegistry 
-from pulsecheck.core.checks import SQLAlchemyAsyncCheck 
+* * * * *
+
+FastAPI Example
+===============
+```python
+from fastapi import FastAPI
+from pulsecheck.core import HealthRegistry
+from pulsecheck.core.checks import SQLAlchemyAsyncCheck
 from pulsecheck.fastapi import make_health_router
+
+from app.database import engine
 
 app = FastAPI()
 
-registry = HealthRegistry(environment="prod") 
+registry = HealthRegistry(environment="prod")
 registry.register(SQLAlchemyAsyncCheck(engine))
 
 app.include_router(make_health_router(registry))
+
+### Sync SQLAlchemy example
+
+from pulsecheck.core.checks import SQLAlchemySyncCheck
+
+registry.register(SQLAlchemySyncCheck(engine))
 ```
+* * * * *
 
-Endpoints:
-
-```bash 
-GET /health 
-GET /health/live 
+Endpoints
+---------
+```text
+GET /health
+GET /health/live
 GET /health/ready
 ```
+These follow Kubernetes semantics:
+
+-   `/live`, container is alive
+
+-   `/ready`,  dependencies are available
+
+-   `/health`, full aggregated state
+
+* * * * *
 
 Django Example
-------------------
-
-```python 
-
-from pulsecheck.core import HealthRegistry 
-from pulsecheck.core.checks import DjangoDBCheck 
+==============
+```python
+from pulsecheck.core import HealthRegistry
+from pulsecheck.core.checks import DjangoDBCheck
 from pulsecheck.django import make_urlpatterns
 
-registry = HealthRegistry(environment="prod") 
+registry = HealthRegistry(environment="prod")
 registry.register(DjangoDBCheck())
 
 urlpatterns = [
     *make_urlpatterns(registry)
 ]
 ```
+* * * * *
 
 Health Response Format
--------------------------
-
+======================
 ```json
 {
   "status": "HEALTHY",
   "timestamp": "2026-02-15T12:34:56Z",
   "environment": "prod",
   "checks": {
-      "database": {
-          "status": "HEALTHY",
-          "response_time_ms": 4.3
-      }
+    "database": {
+      "status": "HEALTHY",
+      "response_time_ms": 4.3
+    }
   }
 }
 ```
-States:
+* * * * *
 
--   `HEALTHY`
--   `DEGRADED`
--   `UNHEALTHY`
+Health States
+-------------
+
+-   `HEALTHY`, dependency available
+
+-   `DEGRADED`, dependency responding but slow
+
+-   `UNHEALTHY`, dependency unavailable or failing
+
+* * * * *
+
+Optional Dependencies (Extras)
+==============================
+
+PulseCheck uses optional extras to avoid unnecessary framework coupling.
+
+| Extra | Installs |
+| --- | --- |
+| fastapi | FastAPI adapter |
+| django | Django adapter |
+| redis_async | Async Redis check |
+| redis_sync | Sync Redis check |
+| rabbitmq | Kombu-based AMQP check |
+| celery | Celery inspect check |
+| sqlalchemy_async | Async SQLAlchemy check |
+| http | HTTP dependency check |
+
+If a dependency is not installed and you try to use its check, a clear runtime error is raised.
+
+* * * * *
 
 Design Philosophy
-------------------
+=================
 
 PulseCheck separates:
 
@@ -134,44 +191,35 @@ This ensures:
 
 -   No tight framework coupling
 
--   Optional extras per ecosystem
+-   Optional ecosystem integration
 
 -   Clean dependency graphs
 
--   Compatibility across service architectures
+-   Microservice-friendly architecture
 
+-   No forced imports of unused frameworks
 
-Optional Dependencies (Extras)
----------------------------------
+Optional checks are lazily loaded - installing `pulsecheck-py` alone does not pull Django, FastAPI, Celery, Redis, etc.
 
-| Extra | Installs |
-| --- | --- |
-| fastapi | FastAPI adapter |
-| django | Django adapter |
-| redis_async | Async Redis check |
-| redis_sync | Sync Redis check |
-| rabbitmq | Kombu-based AMQP check |
-| celery | Celery inspect check |
-| sqlalchemy_async | Async SQLAlchemy check |
-| http | HTTP dependency check |
+* * * * *
 
-Testing
-----------
+Kubernetes Usage Pattern
+========================
 
-PulseCheck is tested against:
+Recommended deployment model:
 
--   Python 3.10+
+-   API container,  checks DB, Redis, required dependencies
 
--   FastAPI
+-   Worker container, checks broker connectivity
 
--   Django
+-   Do not couple unrelated services in readiness checks
 
--   Async and sync dependency scenarios
+Health checks should represent **required runtime dependencies**, not the entire distributed system.
 
 * * * * *
 
 Intended Use
----------------
+============
 
 PulseCheck is designed for:
 
@@ -185,12 +233,28 @@ PulseCheck is designed for:
 
 -   Distributed systems
 
-It is **not** a monitoring system.\
+It is **not** a monitoring system.
+
 It is a lightweight dependency availability indicator.
 
-* * * * * 
+* * * * *
+
+Testing
+=======
+
+PulseCheck is tested against:
+
+-   Python 3.10+
+
+-   FastAPI
+
+-   Django
+
+-   Async and sync dependency scenarios
+
+* * * * *
 
 Contributing
----------------
+============
 
 Issues and pull requests are welcome.
